@@ -2,6 +2,7 @@
 
 const alexa = require('alexa-app');
 const Speech = require('ssml-builder');
+const AmazonSpeech = require('ssml-builder/amazon_speech');
 const questions = require('./questions');
 const utils = require('./utils');
 const constants = require('./constants')
@@ -55,8 +56,67 @@ app.intent('AnswerIntent', {
     ]
   },
   (req, res) => {
-    res.say("You gave answer this").reprompt("Yes, this");
-    utils.newQuestion(req, res);
+    const answer = req.slots['choices'].value;
+    const awesomes = ["awesome", "woot", "great", "hurray", "ha", "good"];
+    const bads = ["unfortunately", "sorry", "apologies", "sadly", "Hmmm"];
+    let speech = new Speech("You gave option " + answer + " as the answer");
+    res.say(speech.ssml(true));
+
+    const session = req.getSession();
+    if (session.get('answer').trim() === answer.trim()) {
+      const currentTime = Date.now();
+
+      const session = req.getSession();
+
+      const diff = currentTime - session.get('start_time');
+
+      if (diff < 0) {
+        const prompt = new AmazonSpeech()
+        .emphasis(bads[utils.getRandomInt(bads.length)] + "!")
+        .pause('1s')
+        .say('You took more than 90 seconds to solve the problem.')
+        .pause('500ms')
+        .say('So, you received no score for this question')
+        .pause('1s')
+        .say('The correct answer is ' + answer);
+
+        res.say(prompt.ssml(true));
+      } else {
+        const currentScore = session.get('score');
+        const scoreReceived = diff / (90000) * 1.0;
+
+        const updatedScore = currentScore + scoreReceived;
+
+        const prompt = new AmazonSpeech()
+        .emphasis(awesomes[utils.getRandomInt(awesomes.length)] + "!")
+        .pause('1s')
+        .say("That is the correct answer!")
+        .pause('1s')
+        .say("You received " + scoreReceived + " for this question")
+        .pause('1s')
+        .say("Your current score is " + updatedScore);
+
+        session.set('score', updatedScore);
+        res.say(prompt.ssml(true));
+      }
+    } else {
+      const prompt = new AmazonSpeech()
+      .emphasize(bads[utils.getRandomInt(bads.length)] + "!")
+      .pause('1s')
+      .say("That is incorrect")
+      .pause('1s')
+      .say('The correct answer is ' + answer);
+
+      res.say(prompt.ssml(true));
+    }
+
+    session.set("skill_status", SKILL_STATES.RATIONALE);
+
+    speech = new Speech()
+    .pause('1s')
+    .say("Would you like to know the rationale for this answer?")
+    .pause("Say yes or no.")
+    res.say(speech.ssml(true)).shouldEndSession(false);
   }
 );
 
@@ -141,6 +201,21 @@ app.intent('AMAZON.YesIntent', (req, res) => {
     questions.startSession()
 
     utils.newQuestion(req, res);
+  } else if (skillState && skillState === SKILL_STATES.RATIONALE) {
+    const prompt = new Speech()
+    .say("Ok, the rationale for this question is")
+    .pause("1s")
+    .say(session.get('rationale'));
+
+    res.say(prompt.ssml(true));
+
+    let counter = session.get('question_counter');
+    if (counter === 4) {
+      utils.finishSession(req, res);
+    } else {
+      utils.newQuestion(req, res);
+    }
+
   }
 });
 
@@ -156,6 +231,13 @@ app.intent('AMAZON.NoIntent', (req, res) => {
 
     session.set('start_time', Date.now());
     res.say(prompt.ssml(true))
+  } else if (skillState && skillState === SKILL_STATES.RATIONALE) {
+    let counter = session.get('question_counter');
+    if (counter === 4) {
+      utils.finishSession(req, res);
+    } else {
+      utils.newQuestion(req, res);
+    }
   }
 });
 

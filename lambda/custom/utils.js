@@ -7,6 +7,10 @@ const SKILL_STATES = constants.SKILL_STATES;
 const NUM_TO_WORD_MAP = ['first', 'second', 'third', 'fourth', 'fifth'];
 
 const utils = {
+  getRandomInt: (max) => {
+    return Math.floor(Math.random() * Math.floor(max));
+  },
+
   getQuestionSpeechWithOptions: (question, questionCounter) => {
       const question_text = question['question'];
       const options = question['options'];
@@ -61,8 +65,23 @@ const utils = {
     session.set('answer', question['correct']);
     session.set('rationale', question['rationale']);
 
+    // TODO: Add card support
     res.say(questionPrompt)
     .say(questionClearPrompt).shouldEndSession(false);
+  },
+
+  finishSession: (req, res) => {
+    const session = req.get("session");
+    const score = session.get("score");
+    const prompt = new Speech()
+    .say("Your final score is " + score)
+    .pause('1s')
+    .say("Thanks for playing.")
+    .pause('1s')
+    .say("Ask alexa, to start math hero to play again anytime");
+
+    session.clear();
+    res.say(prompt.ssml(true)).shouldEndSession(true);
   }
 }
 
