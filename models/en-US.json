@@ -7,8 +7,12 @@
                "samples": [
                   "my answer is {choices}",
                   "my solution is {choices}",
+                  "my answer is option {choices}",
+                  "my solution is option {choices}",
                   "answer is {choices}",
                   "solution is {choices}",
+                  "answer is option {choices}",
+                  "solution is option {choices}",
                   "correct option is {choices}",
                   "correct answer is {choices}",
                   "correct solution is {choices}",
@@ -24,7 +28,16 @@
             },
             {
                "name": "DontKnowIntent",
-               "samples": []
+               "samples": [
+                  "i don't know",
+                  "don't know",
+                  "skip",
+                  "i don't know that",
+                  "who knows",
+                  "i don't know this question",
+                  "i don't know that one",
+                  "dunno"
+               ]
             },
             {
                "name": "AMAZON.StartOverIntent",
@@ -48,6 +61,10 @@
             },
             {
                "name": "AMAZON.YesIntent",
+               "samples": []
+            },
+            {
+               "name": "AMAZON.NoIntent",
                "samples": []
             },
             {
