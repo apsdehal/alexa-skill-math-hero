@@ -1,0 +1,21 @@
+{
+  "name": "math-hero",
+  "version": "1.0.0",
+  "description": "A simple trivia skill i18n version.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "alexa",
+    "skill",
+    "trivia"
+  ],
+  "author": "Amazon.com",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "alexa-app": "git+https://git@github.com/alexa-js/alexa-app.git",
+    "alexa-sdk": "^1.0.12",
+    "ssml-builder": "^0.4.1"
+  }
+}
