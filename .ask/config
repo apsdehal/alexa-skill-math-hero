@@ -1,0 +1,19 @@
+{
+  "deploy_settings": {
+    "default": {
+      "skill_id": "amzn1.ask.skill.fa757529-588d-42e3-848b-6d28348f8d6b",
+      "was_cloned": false,
+      "merge": {
+        "skillManifest": {
+          "apis": {
+            "custom": {
+              "endpoint": {
+                "uri": "ask-custom-math-hero-profile"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

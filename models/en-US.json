@@ -1,0 +1,103 @@
+{
+   "interactionModel": {
+      "languageModel": {
+         "intents": [
+            {
+               "name": "AnswerIntent",
+               "samples": [
+                  "my answer is {choices}",
+                  "my solution is {choices}",
+                  "answer is {choices}",
+                  "solution is {choices}",
+                  "correct option is {choices}",
+                  "correct answer is {choices}",
+                  "correct solution is {choices}",
+                  "{choices}"
+               ],
+               "slots": [
+                  {
+                     "name": "choices",
+                     "type": "choices",
+                     "samples": []
+                  }
+               ]
+            },
+            {
+               "name": "DontKnowIntent",
+               "samples": []
+            },
+            {
+               "name": "AMAZON.StartOverIntent",
+               "samples": []
+            },
+            {
+               "name": "AMAZON.RepeatIntent",
+               "samples": []
+            },
+            {
+               "name": "AMAZON.HelpIntent",
+               "samples": []
+            },
+            {
+               "name": "AMAZON.StopIntent",
+               "samples": []
+            },
+            {
+               "name": "AMAZON.CancelIntent",
+               "samples": []
+            },
+            {
+               "name": "AMAZON.YesIntent",
+               "samples": []
+            },
+            {
+               "name": "Unhandled",
+               "samples": []
+            }
+         ],
+         "types": [
+            {
+               "name": "choices",
+               "values": [
+                  {
+                     "id": null,
+                     "name": {
+                        "value": "A",
+                        "synonyms": []
+                     }
+                  },
+                  {
+                     "id": null,
+                     "name": {
+                        "value": "B",
+                        "synonyms": []
+                     }
+                  },
+                  {
+                     "id": null,
+                     "name": {
+                        "value": "C",
+                        "synonyms": []
+                     }
+                  },
+                  {
+                     "id": null,
+                     "name": {
+                        "value": "D",
+                        "synonyms": []
+                     }
+                  },
+                  {
+                     "id": null,
+                     "name": {
+                        "value": "E",
+                        "synonyms": []
+                     }
+                  }
+               ]
+            }
+         ],
+         "invocationName": "math hero"
+      }
+   }
+}
