@@ -32,7 +32,7 @@ const utils = {
       .pause('1s')
       .say(options[4])
       .pause('1s')
-      .say("You can check you screen or app for clear information");
+      .say("You can check you screen or alexa app for clear information");
   },
 
   newQuestion: (req, res) => {
@@ -43,35 +43,54 @@ const utils = {
       questionCounter = 0;
     }
 
-    const questionClearPrompt = new Speech()
-    .pause('1s')
-    .say("If you want me to repeat the question,")
-    .pause('1s')
-    .say("say repeat")
-    .pause("1s")
-    .say("otherwise say no")
-    .ssml(true);
-
     const question = questions.getNewQuestion();
     const questionPrompt = utils.getQuestionSpeechWithOptions(question, questionCounter).ssml(true);
 
+    const timerPrompt = new Speech()
+    .pause('1s')
+    .say("Your timer starts now.")
+    .pause('500ms')
+    .say("Call me when you are done.")
+
     session.set('skill_state', SKILL_STATES.QA);
     session.set('question_counter', questionCounter + 1);
-    if (questionCounter == 0) {
+    if (questionCounter === 0) {
       session.set('score', 0)
     }
     session.set('repeat', questionPrompt);
-    session.set('repeat_prompt', questionClearPrompt)
+    session.set('question', question);
     session.set('answer', question['correct']);
     session.set('rationale', question['rationale']);
+    session.set('repeated', 0);
 
     // TODO: Add card support
+    utils.displayCard(req, res);
+
+    res.shouldEndSession(false);
     res.say(questionPrompt)
-    .say(questionClearPrompt).shouldEndSession(false);
+    .say(timerPrompt.ssml(true)).send()
+    session.set('start_time', Date.now());
+  },
+
+  displayCard: (req, res, rationale=false) => {
+    const session = req.getSession();
+    const questionNumber = session.get('question_counter');
+    const question = session.get('question');
+    let title = 'Question No. ' + questionNumber;
+    let content = question['question'] + '\nOptions:\n' + question['options'].join('\n');
+    if (rationale) {
+      content = question['rationale'];
+      title += ' Rationale'
+    }
+    res.card({
+      type: 'Simple',
+      title: title,
+      content: content
+    });
   },
 
   finishSession: (req, res) => {
-    const session = req.get("session");
+    const session = req.getSession();
     const score = session.get("score");
     const prompt = new Speech()
     .say("Your final score is " + score)

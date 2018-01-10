@@ -11,6 +11,7 @@ const app = new alexa.app('math-hero');
 app.customSlot('choices', ['A', 'B', 'C', 'D', 'E'])
 
 const SKILL_STATES = constants.SKILL_STATES;
+const MAX_TIME = 180000;
 
 const NUM_TO_WORD_MAP = [null, null, 'second', 'third', 'fourth', 'fifth'];
 
@@ -41,6 +42,22 @@ app.launch((req, res) => {
   res.say(prompt).reprompt(reprompt).shouldEndSession(false);
 });
 
+
+app.intent('TriviaIntent', {
+    'utterances': [
+      'start a {trivia|quiz}',
+      'start {trivia|quiz}',
+      'let\' {play|talk}',
+      '{play|talk|start}'
+    ],
+  },
+  (req, res) => {
+    req.getSession().set('skill_state', SKILL_STATES.STARTED);
+
+    app.intents['AMAZON.YesIntent'].handler(req, res);
+  }
+)
+
 app.intent('AnswerIntent', {
     'slots': {
       'choices': 'choices'
@@ -56,67 +73,92 @@ app.intent('AnswerIntent', {
     ]
   },
   (req, res) => {
-    const answer = req.slots['choices'].value;
+    const skillState = req.getSession().get('skill_state');
+
+    if (!skillState || skillState !== SKILL_STATES.QA) {
+      res.say("Sorry, You must start a trivia to answer a question").shouldEndSession(false);
+      return;
+    }
+    const answer = req.slots['choices'].value[0];
     const awesomes = ["awesome", "woot", "great", "hurray", "ha", "good"];
     const bads = ["unfortunately", "sorry", "apologies", "sadly", "Hmmm"];
     let speech = new Speech("You gave option " + answer + " as the answer");
-    res.say(speech.ssml(true));
+    res.say(speech.ssml(true)).shouldEndSession(false);
 
     const session = req.getSession();
-    if (session.get('answer').trim() === answer.trim()) {
+    const correctAnswer = session.get('answer');
+
+    if (correctAnswer.trim().toLowerCase() === answer.trim().toLowerCase()) {
       const currentTime = Date.now();
 
       const session = req.getSession();
 
       const diff = currentTime - session.get('start_time');
 
-      if (diff < 0) {
+      if (diff > MAX_TIME) {
         const prompt = new AmazonSpeech()
-        .emphasis(bads[utils.getRandomInt(bads.length)] + "!")
+        .emphasis('strong', bads[utils.getRandomInt(bads.length)] + "!")
         .pause('1s')
         .say('You took more than 90 seconds to solve the problem.')
         .pause('500ms')
         .say('So, you received no score for this question')
         .pause('1s')
-        .say('The correct answer is ' + answer);
+        .say('The correct answer is ' + correctAnswer);
 
-        res.say(prompt.ssml(true));
+        res.say(prompt.ssml(true)).shouldEndSession(false);
       } else {
         const currentScore = session.get('score');
-        const scoreReceived = diff / (90000) * 1.0;
+        const scoreReceived = Math.round(((MAX_TIME - diff) / (MAX_TIME) * 1.0) * 100) / 100;
 
-        const updatedScore = currentScore + scoreReceived;
+        const updatedScore = Math.round((currentScore + scoreReceived) * 100) / 100 ;
 
         const prompt = new AmazonSpeech()
-        .emphasis(awesomes[utils.getRandomInt(awesomes.length)] + "!")
+        .emphasis('strong', awesomes[utils.getRandomInt(awesomes.length)] + "!")
         .pause('1s')
         .say("That is the correct answer!")
         .pause('1s')
-        .say("You received " + scoreReceived + " for this question")
+        .say("You took " + diff / 1000 + " seconds to solve this question")
+        .pause('1s')
+        .say("and you received " + scoreReceived + " points")
         .pause('1s')
         .say("Your current score is " + updatedScore);
 
         session.set('score', updatedScore);
-        res.say(prompt.ssml(true));
+        res.say(prompt.ssml(true)).shouldEndSession(false);
       }
     } else {
       const prompt = new AmazonSpeech()
-      .emphasize(bads[utils.getRandomInt(bads.length)] + "!")
+      .emphasis('strong', bads[utils.getRandomInt(bads.length)] + "!")
       .pause('1s')
       .say("That is incorrect")
       .pause('1s')
-      .say('The correct answer is ' + answer);
+      .say('The correct answer is ' + correctAnswer);
 
-      res.say(prompt.ssml(true));
+      res.say(prompt.ssml(true)).shouldEndSession(false);
     }
 
-    session.set("skill_status", SKILL_STATES.RATIONALE);
+    session.set("skill_state", SKILL_STATES.RATIONALE);
+
+    utils.displayCard(req, res, true);
+
+    const counter = session.get('question_counter');
 
     speech = new Speech()
     .pause('1s')
-    .say("Would you like to know the rationale for this answer?")
-    .pause("Say yes or no.")
-    res.say(speech.ssml(true)).shouldEndSession(false);
+    .say("Rationale for this question has been posted to your alexa app")
+
+    const nextQuestionPrompt = new Speech()
+    .pause('1s')
+    .say("Should I ask next question?")
+    .pause('1s')
+    .say("Say yes or no.");
+
+    if (counter === 4) {
+      res.say(speech.ssml(true)).shouldEndSession(false);
+      utils.finishSession(req, res);
+    } else {
+      res.say(speech.ssml(true)).say(nextQuestionPrompt.ssml(true)).shouldEndSession(false);
+    }
   }
 );
 
@@ -133,12 +175,33 @@ app.intent('DontKnowIntent', {
     ]
   }, (req, res) => {
     const session = req.getSession();
-    const prompt = new Speech()
-    .say("Ok, no problem")
-    .pause("Let's try next question");
-    res.say(prompt.ssml(true))
-    utils.newQuestion(req, res);
+    const skillState = session.get('skill_state');
 
+    if (skillState && skillState === SKILL_STATES.QA) {
+      session.set("skill_state", SKILL_STATES.RATIONALE);
+
+      utils.displayCard(req, res, true);
+
+      const counter = session.get('question_counter');
+
+      const speech = new Speech()
+      .say("Ok, no problem")
+      .pause('1s')
+      .say("Rationale for this question has been posted to your alexa app")
+
+      const nextQuestionPrompt = new Speech()
+      .pause('1s')
+      .say("Should I ask next question?")
+      .pause('1s')
+      .say("Say yes or no.");
+
+      if (counter === 4) {
+        res.say(speech.ssml(true)).shouldEndSession(false);
+        utils.finishSession(req, res);
+      } else {
+        res.say(speech.ssml(true)).say(nextQuestionPrompt.ssml(true)).shouldEndSession(false);
+      }
+    }
   }
 );
 
@@ -149,26 +212,52 @@ app.intent('AMAZON.StartOverIntent', (req, res) => {
 app.intent('AMAZON.RepeatIntent', (req, res) => {
   const session = req.getSession();
   const skillState = session.get('skill_state');
+  const repeatState = session.get('repeated');
 
-  if (skillState && skillState === SKILL_STATES.QA) {
+  if (skillState && skillState === SKILL_STATES.QA && repeatState === 0) {
     const repeat = session.get('repeat');
-    const repeatPrompt = session.get('repeat_prompt');
+    session.set('repeated', 1);
 
-    res.say(repeat)
-    .say(repeatPrompt).shouldEndSession(false);
+    res.shouldEndSession(false);
+    res.say(repeat).send()
   }
 });
 
 app.intent('AMAZON.HelpIntent', (req, res) => {
-  res.say("Hello");
+  const prompt = new Speech()
+  .say("In each trivia")
+  .pause('500ms')
+  .say("I will ask you 5 questions.")
+  .pause('500ms')
+  .say("You will have 3 minutes to solve each question.")
+  .pause('1s')
+  .say("Faster you do it, more you will score")
+  .pause('1s')
+  .say("The timer for question starts as soon as I start speaking")
+  .pause('1s')
+  .say("You can also ask me to repeat a question once")
+  .pause('1s'           )
+  .say("Whenever you are done with a question, say alexa, tell math hero my answer is X.")
+  .pause('500ms')
+  .say("Where X can be A, B, C, D or E")
+  .pause('500ms')
+  .say("For example, you can say, alexa, tell math hero my answer is B")
+  .pause('1s')
+  .say("or if you don't know, you can say, alexa, tell math hero, i don't know")
+  .pause('1s');
+
+  req.getSession().clear();
+  res.say(prompt.ssml(true)).shouldEndSession(false);
 });
 
 app.intent('AMAZON.StopIntent', (req, res) => {
-  res.say("Hello");
+  res.say("Sure, let's play some other time").shouldEndSession(true);
+  req.getSession().clear()
 });
 
 app.intent('AMAZON.CancelIntent', (req, res) => {
-  res.say("Hello");
+  res.say("Sure, let's play some other time").shouldEndSession(true);
+  req.getSession().clear()
 });
 
 app.intent('AMAZON.YesIntent', (req, res) => {
@@ -181,41 +270,23 @@ app.intent('AMAZON.YesIntent', (req, res) => {
     .pause('500ms')
     .say("Now I will start a trivia quiz.")
     .pause('1s')
-    .say("I will ask you 5 questions.")
-    .pause('500ms')
-    .say("You will have 90 seconds to solve each question.")
-    .pause('1s')
-    .say("Faster you do it, more you will score")
-    .pause('1s')
-    .say("Whenever you are done with a question, say alexa, tell math hero my answer is X.")
-    .pause('500ms')
-    .say("Where X can be A, B, C, D or E")
-    .pause('500ms')
-    .say("For example, you can say, alexa, tell math hero my answer is B")
+    .say("For more information, on how to answer ask alexa for help")
     .pause('1s')
     .say("So, let's get started")
     .pause('1s')
 
-    res.say(prompt.ssml(true));
+    res.say(prompt.ssml(true)).shouldEndSession(false);
 
     questions.startSession()
 
     utils.newQuestion(req, res);
   } else if (skillState && skillState === SKILL_STATES.RATIONALE) {
-    const prompt = new Speech()
-    .say("Ok, the rationale for this question is")
-    .pause("1s")
-    .say(session.get('rationale'));
-
-    res.say(prompt.ssml(true));
-
     let counter = session.get('question_counter');
     if (counter === 4) {
       utils.finishSession(req, res);
     } else {
       utils.newQuestion(req, res);
     }
-
   }
 });
 
@@ -228,21 +299,14 @@ app.intent('AMAZON.NoIntent', (req, res) => {
     .say("Sure.")
     .pause('1s')
     .say("Your timer start now, call me when you are done");
-
-    session.set('start_time', Date.now());
-    res.say(prompt.ssml(true))
+    res.say(prompt.ssml(true)).shouldEndSession(false);
   } else if (skillState && skillState === SKILL_STATES.RATIONALE) {
-    let counter = session.get('question_counter');
-    if (counter === 4) {
-      utils.finishSession(req, res);
-    } else {
-      utils.newQuestion(req, res);
-    }
+    utils.finishSession(req, res);
   }
 });
 
 app.intent('Unhandled', (req, res) => {
-  res.say("Hello");
+  res.say("Sorry, I don't know that one").shouldEndSession(false);
 });
 
 

@@ -3,6 +3,20 @@
       "languageModel": {
          "intents": [
             {
+               "name": "TriviaIntent",
+               "samples": [
+                  "start a trivia",
+                  "start a quiz",
+                  "start trivia",
+                  "start quiz",
+                  "let' play",
+                  "let' talk",
+                  "play",
+                  "talk",
+                  "start"
+               ]
+            },
+            {
                "name": "AnswerIntent",
                "samples": [
                   "my answer is {choices}",
