@@ -6,12 +6,13 @@ const AmazonSpeech = require('ssml-builder/amazon_speech');
 const questions = require('./questions');
 const utils = require('./utils');
 const constants = require('./constants')
+const db = require('./db');
 const app = new alexa.app('math-hero');
 
 app.customSlot('choices', ['A', 'B', 'C', 'D', 'E'])
 
 const SKILL_STATES = constants.SKILL_STATES;
-const MAX_TIME = 180000;
+const MAX_TIME = constants.MAX_TIME;
 
 const NUM_TO_WORD_MAP = [null, null, 'second', 'third', 'fourth', 'fifth'];
 
@@ -38,8 +39,61 @@ app.launch((req, res) => {
   reprompt = reprompt.ssml(true);
 
   const session = req.getSession();
-  session.set('skill_state', SKILL_STATES.STARTED)
-  res.say(prompt).reprompt(reprompt).shouldEndSession(false);
+  session.set('skill_state', SKILL_STATES.STARTED);
+
+  const checkIfUserExistsParams = {
+    TableName: db.table,
+    Key: {
+      user_id: req.userId
+    }
+  };
+
+  return db.get(checkIfUserExistsParams).then(data => {
+    console.log(data);
+    const user = data.Item;
+
+    if (user) {
+      session.set('total_score', user.score);
+      session.set('level', user.level);
+
+      session.set('avail_time', MAX_TIME - 5000 * (parseInt(user.level, 10) - 1))
+      prompt = new Speech()
+      .say("Hello")
+      .pause('1s')
+      .say("Welcome back to Math hero.")
+      .pause('1s')
+      .say('Your current score is: ' + user.score)
+      .pause('1s')
+      .say("Would you like to start a trivia quiz?")
+      res.say(prompt.ssml(true)).reprompt(reprompt).shouldEndSession(false);
+      return res.send()
+    } else {
+      const addUserParams = {
+        TableName: db.table,
+        Item: {
+          user_id: req.userId,
+          score: 0,
+          level: 1
+        }
+      }
+
+      return db.put(addUserParams).then(data => {
+        console.log(data + "put");
+        session.set('total_score', 0);
+        session.set('level', 1);
+        session.set('avail_time', MAX_TIME);
+
+        res.say(prompt).reprompt(reprompt).shouldEndSession(false);
+        return res.send();
+      }, data => {
+        res.say('something went wrong, please try again').shouldEndSession(true);
+        return res.send();
+      });
+    }
+  }, data => {
+    res.say('something went wrong, please try again').shouldEndSession(true);
+    return res.send()
+  });
 });
 
 
@@ -69,7 +123,8 @@ app.intent('AnswerIntent', {
       "{answer|solution} is option {-|choices}",
       "correct option is {-|choices}",
       "correct {answer|solution} is {-|choices}",
-      "{-|choices}"
+      "{-|choices}",
+      "is it {-|choices}"
     ]
   },
   (req, res) => {
@@ -94,12 +149,12 @@ app.intent('AnswerIntent', {
       const session = req.getSession();
 
       const diff = currentTime - session.get('start_time');
-
-      if (diff > MAX_TIME) {
+      const availTime = session.get('avail_time');
+      if (diff > availTime) {
         const prompt = new AmazonSpeech()
         .emphasis('strong', bads[utils.getRandomInt(bads.length)] + "!")
         .pause('1s')
-        .say('You took more than 90 seconds to solve the problem.')
+        .say('You took more than ' + Math.round(availTime / 1000) + ' seconds to solve the problem.')
         .pause('500ms')
         .say('So, you received no score for this question')
         .pause('1s')
@@ -108,8 +163,7 @@ app.intent('AnswerIntent', {
         res.say(prompt.ssml(true)).shouldEndSession(false);
       } else {
         const currentScore = session.get('score');
-        const scoreReceived = Math.round(((MAX_TIME - diff) / (MAX_TIME) * 1.0) * 100) / 100;
-
+        const scoreReceived = Math.round(((availTime - diff) / (availTime) * 1.0) * 100) / 100;
         const updatedScore = Math.round((currentScore + scoreReceived) * 100) / 100 ;
 
         const prompt = new AmazonSpeech()
@@ -153,9 +207,9 @@ app.intent('AnswerIntent', {
     .pause('1s')
     .say("Say yes or no.");
 
-    if (counter === 4) {
+    if (counter === 5) {
       res.say(speech.ssml(true)).shouldEndSession(false);
-      utils.finishSession(req, res);
+      return utils.finishSession(req, res);
     } else {
       res.say(speech.ssml(true)).say(nextQuestionPrompt.ssml(true)).shouldEndSession(false);
     }
@@ -195,9 +249,9 @@ app.intent('DontKnowIntent', {
       .pause('1s')
       .say("Say yes or no.");
 
-      if (counter === 4) {
+      if (counter === 5) {
         res.say(speech.ssml(true)).shouldEndSession(false);
-        utils.finishSession(req, res);
+        return utils.finishSession(req, res);
       } else {
         res.say(speech.ssml(true)).say(nextQuestionPrompt.ssml(true)).shouldEndSession(false);
       }
@@ -224,30 +278,58 @@ app.intent('AMAZON.RepeatIntent', (req, res) => {
 });
 
 app.intent('AMAZON.HelpIntent', (req, res) => {
-  const prompt = new Speech()
-  .say("In each trivia")
-  .pause('500ms')
-  .say("I will ask you 5 questions.")
-  .pause('500ms')
-  .say("You will have 3 minutes to solve each question.")
-  .pause('1s')
-  .say("Faster you do it, more you will score")
-  .pause('1s')
-  .say("The timer for question starts as soon as I start speaking")
-  .pause('1s')
-  .say("You can also ask me to repeat a question once")
-  .pause('1s'           )
-  .say("Whenever you are done with a question, say alexa, tell math hero my answer is X.")
-  .pause('500ms')
-  .say("Where X can be A, B, C, D or E")
-  .pause('500ms')
-  .say("For example, you can say, alexa, tell math hero my answer is B")
-  .pause('1s')
-  .say("or if you don't know, you can say, alexa, tell math hero, i don't know")
-  .pause('1s');
+  const session = req.getSession();
+  function getPrompt(secs) {
+    const prompt = new Speech()
+    .say("In each trivia")
+    .pause('500ms')
+    .say("I will ask you 5 questions.")
+    .pause('500ms')
+    .say("You will have " + secs + " seconds to solve each question.")
+    .pause('1s')
+    .say("Faster you do it, more you will score")
+    .pause('1s')
+    .say("After a certain score, you will level up")
+    .pause('1s')
+    .say("The timer for question starts as soon as I start speaking")
+    .pause('1s')
+    .say("You can also ask me to repeat a question once")
+    .pause('1s'           )
+    .say("Whenever you are done with a question, say alexa, tell math hero my answer is X.")
+    .pause('500ms')
+    .say("Where X can be A, B, C, D or E")
+    .pause('500ms')
+    .say("For example, you can say, alexa, tell math hero my answer is B")
+    .pause('1s')
+    .say("or if you don't know, you can say, alexa, tell math hero, i don't know")
+    .pause('1s');
+    return prompt;
+  }
 
-  req.getSession().clear();
-  res.say(prompt.ssml(true)).shouldEndSession(false);
+  const availTime = session.get('avail_time');
+
+  if (availTime) {
+    req.getSession().clear("question_counter");
+    res.say(getPrompt(Math.round(availTime / 1000)).ssml(true)).shouldEndSession(false);
+
+  } else {
+    const getUserParams = {
+      TableName: db.table,
+      Item: {
+        user_id: req.userId
+      }
+    };
+
+    return db.get(getUserParams).then(data => {
+      const user = data.Item;
+      const availTime = MAX_TIME - 5000 * (parseInt(user.level, 10) - 1)
+
+      req.getSession().clear("question_counter");
+      res.say(getPrompt(Math.round(availTime / 1000)).ssml(true)).shouldEndSession(false);
+      return res.send();
+    })
+  }
+
 });
 
 app.intent('AMAZON.StopIntent', (req, res) => {
@@ -263,6 +345,7 @@ app.intent('AMAZON.CancelIntent', (req, res) => {
 app.intent('AMAZON.YesIntent', (req, res) => {
   const session = req.getSession();
   const skillState = session.get('skill_state');
+  const availTime = session.get('avail_time');
 
   if (skillState && skillState === SKILL_STATES.STARTED) {
     const prompt = new Speech()
@@ -271,6 +354,8 @@ app.intent('AMAZON.YesIntent', (req, res) => {
     .say("Now I will start a trivia quiz.")
     .pause('1s')
     .say("For more information, on how to answer ask alexa for help")
+    .pause('1s')
+    .say("You have " + Math.round(availTime / 1000) + " seconds to answer each question")
     .pause('1s')
     .say("So, let's get started")
     .pause('1s')
@@ -282,8 +367,8 @@ app.intent('AMAZON.YesIntent', (req, res) => {
     utils.newQuestion(req, res);
   } else if (skillState && skillState === SKILL_STATES.RATIONALE) {
     let counter = session.get('question_counter');
-    if (counter === 4) {
-      utils.finishSession(req, res);
+    if (counter === 5) {
+      return utils.finishSession(req, res);
     } else {
       utils.newQuestion(req, res);
     }
@@ -301,7 +386,7 @@ app.intent('AMAZON.NoIntent', (req, res) => {
     .say("Your timer start now, call me when you are done");
     res.say(prompt.ssml(true)).shouldEndSession(false);
   } else if (skillState && skillState === SKILL_STATES.RATIONALE) {
-    utils.finishSession(req, res);
+    return utils.finishSession(req, res);
   }
 });
 

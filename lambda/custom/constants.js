@@ -4,6 +4,9 @@ const SKILL_STATES = {
   RATIONALE: 'rationale'
 }
 
+const MAX_TIME = 180000;
+
 module.exports = {
-  SKILL_STATES
+  SKILL_STATES,
+  MAX_TIME
 }

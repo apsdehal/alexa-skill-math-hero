@@ -1,8 +1,10 @@
 const Speech = require('ssml-builder');
 const questions = require('./questions');
 const constants = require('./constants');
+const db = require('./db');
 
 const SKILL_STATES = constants.SKILL_STATES;
+const MAX_TIME = constants.MAX_TIME;
 
 const NUM_TO_WORD_MAP = ['first', 'second', 'third', 'fourth', 'fifth'];
 
@@ -46,9 +48,7 @@ const utils = {
     const question = questions.getNewQuestion();
     const questionPrompt = utils.getQuestionSpeechWithOptions(question, questionCounter).ssml(true);
 
-    const timerPrompt = new Speech()
-    .pause('1s')
-    .say("Your timer starts now.")
+    const endPrompt = new Speech()
     .pause('500ms')
     .say("Call me when you are done.")
 
@@ -68,7 +68,7 @@ const utils = {
 
     res.shouldEndSession(false);
     res.say(questionPrompt)
-    .say(timerPrompt.ssml(true)).send()
+    .say(endPrompt.ssml(true)).send()
     session.set('start_time', Date.now());
   },
 
@@ -92,15 +92,45 @@ const utils = {
   finishSession: (req, res) => {
     const session = req.getSession();
     const score = session.get("score");
-    const prompt = new Speech()
-    .say("Your final score is " + score)
-    .pause('1s')
-    .say("Thanks for playing.")
-    .pause('1s')
-    .say("Ask alexa, to start math hero to play again anytime");
 
-    session.clear();
-    res.say(prompt.ssml(true)).shouldEndSession(true);
+    const totalScore = session.get('total_score');
+    const level = session.get('level');
+
+    const newLevel = Math.ceil((totalScore + score) / 5);
+
+    const updateParams = {
+      TableName: db.table,
+      Item: {
+        user_id: req.userId,
+        score: totalScore + score,
+        level: newLevel
+      }
+    }
+
+    return db.put(updateParams).then(data => {
+      session.clear();
+      let prompt = new Speech()
+      .say('Your final score is ' + score)
+      .pause('1s')
+      .say('Your current total score is' + (score + totalScore))
+      .pause('1s');
+      res.say(prompt.ssml(true));
+
+      if (newLevel !== level) {
+        prompt = new Speech()
+        .say('Woot! You levelled up to level ' + newLevel)
+        .pause('1s')
+        .say('Now you will have ' + Math.round((MAX_TIME - 5000 * (newLevel - 1)) / 1000) + ' seconds to solve each question')
+        .pause('1s')
+        .say('You are making progress and to make you better challenges will become tougher.');
+        res.say(prompt.ssml(true));
+      }
+      res.shouldEndSession(true);
+      return res.send();
+    }, data => {
+      res.say("Something went wrong, sorry, please try again.").shouldEndSession(true);
+      return res.send();
+    })
   }
 }
 
