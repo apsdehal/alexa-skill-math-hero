@@ -34,7 +34,7 @@ const utils = {
       .pause('1s')
       .say(options[4])
       .pause('1s')
-      .say("You can check you screen or alexa app for clear information");
+      .say("You can check your screen or alexa app for clear information");
   },
 
   newQuestion: (req, res) => {
@@ -62,31 +62,68 @@ const utils = {
     session.set('answer', question['correct']);
     session.set('rationale', question['rationale']);
     session.set('repeated', 0);
-
-    // TODO: Add card support
-    utils.displayCard(req, res);
-
-    res.shouldEndSession(false);
-    res.say(questionPrompt)
-    .say(endPrompt.ssml(true)).send()
     session.set('start_time', Date.now());
+
+    const dbParams = {
+      TableName: db.table,
+      Item: {
+        user_id: req.userId,
+        answer: question['correct'],
+        rationale: question['rationale'],
+        start_time: session.get('start_time'),
+        current_score: session.get('score'),
+        question_counter: session.get('question_counter'),
+        score: session.get('total_score'),
+        level: session.get('level'),
+        repeat: questionPrompt
+      }
+    }
+
+
+    return db.put(dbParams).then((data) => {
+      utils.displayCard(req, res);
+
+      res.shouldEndSession(true);
+      res.say(questionPrompt)
+      .say(endPrompt.ssml(true));
+
+      return res.send();
+    }, (data) => {
+      return res.say('Something went wrong will fetching question').send();
+    });
+
+  },
+
+  getAvailTime: (level) => {
+    return MAX_TIME - 5000 * (parseInt(level, 10) - 1)
   },
 
   displayCard: (req, res, rationale=false) => {
     const session = req.getSession();
     const questionNumber = session.get('question_counter');
-    const question = session.get('question');
     let title = 'Question No. ' + questionNumber;
-    let content = question['question'] + '\nOptions:\n' + question['options'].join('\n');
+    let content;
     if (rationale) {
-      content = question['rationale'];
+      content = session.get('rationale');
       title += ' Rationale'
+    } else {
+      const question = session.get('question');
+      content = question['question'] + '\nOptions:\n' + question['options'].join('\n');
     }
     res.card({
       type: 'Simple',
       title: title,
       content: content
     });
+  },
+
+  setSessionStuffFromUser: (session, user) => {
+    session.set('score', user.current_score);
+    session.set('question_counter', user.question_counter);
+    session.set('rationale', user.rationale);
+    session.set('answer', user.answer);
+    session.set('level', user.level);
+    session.set('total_score', user.score);
   },
 
   finishSession: (req, res) => {
@@ -96,7 +133,7 @@ const utils = {
     const totalScore = session.get('total_score');
     const level = session.get('level');
 
-    const newLevel = Math.ceil((totalScore + score) / 5);
+    const newLevel = Math.ceil((totalScore + score + 1) / 5);
 
     const updateParams = {
       TableName: db.table,
