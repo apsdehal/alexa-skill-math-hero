@@ -3,6 +3,13 @@
 Alexa skill for kids that asks multiple choice questions from various topics in mathematics. 
 You can level up in the game and get stronger with time. Rationale/solutions for questions are provided for better learning.
 
+## Inspiration
+
+For providing an easy platform for learning simple as well as advanced mathematics. My aim was to gamify this experience by adding a levelling up scenario and thus, making this game interesting for kids.
+
+## Alexa Skill ID
+amzn1.ask.skill.fa757529-588d-42e3-848b-6d28348f8d6b
+
 ## Technology
 
 - Uses `alexa-app` framework by alexa-js team.
