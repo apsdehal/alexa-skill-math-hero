@@ -71,6 +71,12 @@ Continue the trivia or ask for rationale. After completing 5 questions, you will
 Alexa will also tell you when you level up.
 
 
+## Example Question and Rationale
+
+![Question](https://i.imgur.com/iFgdIla.png)
+![Rationale](https://i.imgur.com/wEgC9WQ.png)
+
+
 ## Challenges I ran into
 
 The conversation model of the skill was becoming quite complex and had numerous issues as I was providing score based on the time taken to solve the question. I also had to find out a clear way to communicate the question to user as alexa sometimes spoke too fast. I built up the persistence using dynamodb where I stored the important details related to the current question and the start time itself, the request was made before speaking. I added multiple interaction points so as to have a smooth conversation flow. Further, I used cards in alexa app to clearly communicate the question to the users. 
